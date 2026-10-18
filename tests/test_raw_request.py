@@ -1,6 +1,9 @@
 from __future__ import absolute_import, division, print_function
 
 import datetime
+from urllib.parse import urlsplit
+
+import pytest
 
 import stripe
 
@@ -223,3 +226,24 @@ class TestRawRequest(object):
             resp, api_mode="V1"
         )
         assert isinstance(deserialized, stripe.Account)
+
+    @pytest.mark.anyio
+    async def test_raw_request_async_usage_reported_and_not_sent(
+        self, http_client_mock, stripe_mock_stripe_client
+    ):
+        http_client_mock.stub_request(
+            "get",
+            path=self.GET_REL_URL,
+            rbody='{"id": "acct_123", "object": "account"}',
+            rcode=200,
+            rheaders={},
+        )
+
+        await stripe_mock_stripe_client.raw_request_async(
+            "get", self.GET_REL_URL, usage=["fetch_related_object"]
+        )
+
+        last_call = http_client_mock.get_last_call()
+        assert urlsplit(last_call.abs_url).path == self.GET_REL_URL
+        assert urlsplit(last_call.abs_url).query == ""
+        assert last_call.usage == ["fetch_related_object", "async"]
